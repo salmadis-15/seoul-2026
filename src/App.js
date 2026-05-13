@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 const BG = "#F2EBDF";
 const DARK = "#1c1917";
