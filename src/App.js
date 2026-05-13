@@ -254,87 +254,76 @@ const CHECKLIST = [
   {t:"Check passport expiry (6+ months from June 1)",u:false},
 ];
 
-// ── MAP TAB ───────────────────────────────────────────────────────────────────
+// ── MAP TAB (Google Maps iframe — zero dependencies) ──────────────────────────
 function MapTab() {
   const [day, setDay] = useState(1);
   const [layers, setLayers] = useState({h:false,s:false,r:false});
-  const [ready, setReady] = useState(false);
-  const ref = useRef(null);
-  const map = useRef(null);
-  const pins = useRef([]);
+  const [selected, setSelected] = useState(null);
   const d = MAP_DAYS.find(x => x.n === day);
 
-  useEffect(() => {
-    const check = () => { if (window.L) { setReady(true); } else { setTimeout(check, 100); } };
-    check();
-  }, []);
+  // Build all visible pins
+  const allPins = [
+    ...d.places.map((p,i) => ({...p, label:String(i+1), color:d.color, kind:"day"})),
+    ...(layers.h ? HOTELS.map(h => ({...h, name:h.name, label:"H", color:"#B8860B", kind:"hotel"})) : []),
+    ...(layers.s ? SHOPS.map(s => ({lat:s.lat,lng:s.lng, name:s.n, label:"S", color:s.m?"#7B1FA2":"#E91E8C", kind:"shop"})) : []),
+    ...(layers.r ? RESTS.map(r => ({lat:r.lat,lng:r.lng, name:r.n, label:"R", color:r.r?"#C62828":"#EF6C00", kind:"rest"})) : []),
+  ];
 
-  useEffect(() => {
-    if (!ready || !ref.current || map.current) return;
-    map.current = window.L.map(ref.current).setView([37.566, 126.978], 12);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution:"© OSM"}).addTo(map.current);
-    draw();
-  }, [ready]);
+  // Build Google Maps embed URL with markers for day places only
+  const dayMarkers = d.places.map((p,i) =>
+    `markers=color:0x${d.color.replace("#","")}%7Clabel:${i+1}%7C${p.lat},${p.lng}`
+  ).join("&");
 
-  useEffect(() => { if (map.current) draw(); }, [day, layers]);
-
-  function mkIcon(color, lbl, sm) {
-    const w=sm?18:24, h=sm?24:32, fs=sm?7:10;
-    return window.L.divIcon({className:"",iconSize:[w,h],iconAnchor:[w/2,h],popupAnchor:[0,-h],
-      html:`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 24 32"><path fill="${color}" stroke="white" stroke-width="1.5" d="M12 1C6 1 1 6 1 12c0 9 11 19 11 19S23 21 23 12C23 6 18 1 12 1z"/><text x="12" y="16" font-size="${fs}" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="bold">${lbl}</text></svg>`});
-  }
-
-  function draw() {
-    const L = window.L, m = map.current;
-    if (!m || !L) return;
-    pins.current.forEach(p => m.removeLayer(p)); pins.current = [];
-    const bnds = [];
-    d.places.forEach((p,i) => {
-      const mk = L.marker([p.lat,p.lng],{icon:mkIcon(d.color,i+1,false)}).addTo(m).bindPopup(`<b>${p.name}</b><br><small>${p.note}</small>`);
-      pins.current.push(mk); bnds.push([p.lat,p.lng]);
-    });
-    if (layers.h) HOTELS.forEach(h => { pins.current.push(L.marker([h.lat,h.lng],{icon:mkIcon("#B8860B","H",true)}).addTo(m).bindPopup(`<b>${h.name}</b>`)); });
-    if (layers.s) SHOPS.forEach(s => { pins.current.push(L.marker([s.lat,s.lng],{icon:mkIcon(s.m?"#7B1FA2":"#E91E8C","S",true)}).addTo(m).bindPopup(`<b>${s.n}</b>`)); });
-    if (layers.r) RESTS.forEach(r => { pins.current.push(L.marker([r.lat,r.lng],{icon:mkIcon(r.r?"#C62828":"#EF6C00","R",true)}).addTo(m).bindPopup(`<b>${r.n}</b>`)); });
-    if (bnds.length) try { m.fitBounds(bnds,{padding:[50,50],maxZoom:14}); } catch(e) {}
-  }
+  const center = d.places[0];
+  const embedUrl = `https://www.google.com/maps/embed/v1/search?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNB4&q=Seoul,Korea&center=${center.lat},${center.lng}&zoom=13`;
 
   const tog = k => setLayers(l => ({...l,[k]:!l[k]}));
-  const TBtn = ({k,color,lbl}) => (
-    <button onClick={() => tog(k)} style={{padding:"5px 10px",borderRadius:2,border:`1px solid ${layers[k]?color:"rgba(0,0,0,0.15)"}`,background:layers[k]?color:"transparent",color:layers[k]?"#fff":MUTED,fontFamily:"monospace",fontSize:10,cursor:"pointer"}}>
-      {lbl}
-    </button>
-  );
+
+  // Open Google Maps directions/search for a pin
+  const openMaps = (p) => {
+    window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, "_blank");
+  };
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 44px)"}}>
+      {/* day strip */}
       <div style={{background:BG,borderBottom:"1px solid rgba(0,0,0,0.1)",display:"flex",gap:2,padding:"5px 6px",overflowX:"auto",flexShrink:0}}>
         {MAP_DAYS.map(x => (
-          <button key={x.n} onClick={() => setDay(x.n)} style={{flexShrink:0,padding:"4px 8px",border:`1px solid ${day===x.n?x.color:"rgba(0,0,0,0.12)"}`,background:day===x.n?x.color:"transparent",color:day===x.n?"#fff":DARK,cursor:"pointer",borderRadius:2,fontFamily:"monospace",fontSize:9,textTransform:"uppercase"}}>
+          <button key={x.n} onClick={() => { setDay(x.n); setSelected(null); }} style={{flexShrink:0,padding:"4px 8px",border:`1px solid ${day===x.n?x.color:"rgba(0,0,0,0.12)"}`,background:day===x.n?x.color:"transparent",color:day===x.n?"#fff":DARK,cursor:"pointer",borderRadius:2,fontFamily:"monospace",fontSize:9,textTransform:"uppercase"}}>
             D{x.n}
           </button>
         ))}
         <div style={{display:"flex",gap:3,alignItems:"center",marginLeft:6,paddingLeft:6,borderLeft:"1px solid rgba(0,0,0,0.1)",flexShrink:0}}>
-          <TBtn k="h" color="#B8860B" lbl="Hotels"/>
-          <TBtn k="s" color="#E91E8C" lbl="Shops"/>
-          <TBtn k="r" color="#EF6C00" lbl="Restaurants"/>
+          {[{k:"h",color:"#B8860B",lbl:"Hotels"},{k:"s",color:"#E91E8C",lbl:"Shops"},{k:"r",color:"#EF6C00",lbl:"Food"}].map(({k,color,lbl}) => (
+            <button key={k} onClick={() => tog(k)} style={{padding:"4px 8px",borderRadius:2,border:`1px solid ${layers[k]?color:"rgba(0,0,0,0.15)"}`,background:layers[k]?color:"transparent",color:layers[k]?"#fff":MUTED,fontFamily:"monospace",fontSize:9,cursor:"pointer"}}>{lbl}</button>
+          ))}
         </div>
       </div>
-      {!ready && <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",fontStyle:"italic",color:MUTED}}>Loading map...</div>}
-      <div ref={ref} style={{flex:1,display:ready?"block":"none"}}/>
-      <div style={{background:BG,borderTop:"1px solid rgba(0,0,0,0.1)",display:"flex",gap:6,padding:"7px 8px",overflowX:"auto",flexShrink:0}}>
-        {d.places.map((p,i) => (
-          <div key={i} style={{flexShrink:0,minWidth:150,padding:8,border:"1px solid rgba(0,0,0,0.1)",background:"rgba(255,255,255,0.5)",borderRadius:2}}>
-            <div style={{display:"flex",gap:6}}>
-              <div style={{flexShrink:0,width:18,height:18,borderRadius:"50%",background:d.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:"bold"}}>{i+1}</div>
-              <div>
-                <div style={{fontFamily:"Georgia,serif",fontSize:12,lineHeight:1.3}}>{p.name}</div>
-                <div style={{fontSize:10,color:MUTED,marginTop:2,lineHeight:1.3}}>{p.note}</div>
-              </div>
-            </div>
-          </div>
-        ))}
+
+      {/* pin list — tap to open in Google Maps */}
+      <div style={{background:BG,borderBottom:"1px solid rgba(0,0,0,0.1)",padding:"8px 10px",flexShrink:0}}>
+        <div style={{fontFamily:"monospace",fontSize:8,textTransform:"uppercase",letterSpacing:"0.15em",color:MUTED,marginBottom:6}}>
+          Tap a pin to open in Google Maps
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+          {allPins.map((p,i) => (
+            <button key={i} onClick={() => openMaps(p)} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 8px",border:`1px solid ${p.color}`,borderRadius:2,background:"rgba(255,255,255,0.5)",cursor:"pointer"}}>
+              <div style={{width:16,height:16,borderRadius:"50%",background:p.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:"bold",flexShrink:0}}>{p.label}</div>
+              <span style={{fontFamily:"Georgia,serif",fontSize:11}}>{p.name}</span>
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* map iframe */}
+      <iframe
+        title="Seoul Map"
+        style={{flex:1,border:"none"}}
+        loading="lazy"
+        allowFullScreen
+        referrerPolicy="no-referrer-when-downgrade"
+        src={`https://maps.google.com/maps?q=${center.lat},${center.lng}&z=13&output=embed`}
+      />
     </div>
   );
 }
