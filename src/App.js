@@ -265,12 +265,8 @@ function MapTab() {
   const d = MAP_DAYS.find(x => x.n === day);
 
   useEffect(() => {
-    if (window.L) { setReady(true); return; }
-    const t = setInterval(() => {
-      if (window.L) { clearInterval(t); setReady(true); }
-    }, 100);
-    setTimeout(() => clearInterval(t), 10000);
-    return () => clearInterval(t);
+    const check = () => { if (window.L) { setReady(true); } else { setTimeout(check, 100); } };
+    check();
   }, []);
 
   useEffect(() => {
