@@ -266,7 +266,10 @@ function MapTab() {
 
   useEffect(() => {
     if (window.L) { setReady(true); return; }
-    const t = setInterval(() => { if (window.L) { clearInterval(t); setReady(true); } }, 200);
+    const t = setInterval(() => {
+      if (window.L) { clearInterval(t); setReady(true); }
+    }, 100);
+    setTimeout(() => clearInterval(t), 10000);
     return () => clearInterval(t);
   }, []);
 
